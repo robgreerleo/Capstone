@@ -1,0 +1,249 @@
+---
+title: "Feature Selection and Predictive Performance in Incomplete, Higher-Dimensional Datasets"
+subtitle: "Scenario 38: Summary Results"
+output: html_document
+---
+
+```{r Global Options, echo = F }
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
+options(knitr.table.format = "html")
+```
+
+```{css}
+h4 {text-align: center;}
+```
+
+```{r Load Packages, results = 'hide'}
+packs = c("cowplot","dplyr","formattable","ggplot2","gridExtra","kableExtra")
+lapply(packs, require, character.only = TRUE)
+scenID = 38
+```
+
+```{r Colorize Text}
+colT = function(x,color) {
+  sprintf("<span style='color: %s;'>%s</span>",color,x)
+}
+```
+  
+## Introduction    
+The overall goal of this project is to evaluate the performance of various methods in terms of feature selection and predictive accuracy when applied to incomplete, smaller-sample, higher-dimensional datasets with the possibility of high pairwise correlation among the features. The supervisor is either continuous or binary and the features are multivariate normal. This markdown file presents the results of scenario 38 (of 40 total scenarios). Full results can be found at the associated RShiny page or in the associated paper.  
+  
+Four methods are considered, and their respective details are incorporated into the associated markdown files. As a brief overview, the base case method is Multiple Imputation Random LASSO (“MIRL”, Liu, et. al., 2016) which utilizes the Multivariate Imputation by Chained Equations (“MICE”) algorithm for the imputation of missing data and an enhanced Random LASSO process for feature selection and coefficient estimation. Alternative method 1 (“MFRL”) instead utilizes Missing Forest for the imputation portion of the algorithm (MissForest, Stekhoven and Buhlmann, 2012). MissForest was found to outperform KNN and MICE using various medical datasets, but with smaller amounts of missing data than used in this study. Alternative methods 2 and 3 originate from the observation of similarities between MIRL and Random Forest. Alternative method 2 (“RF”) replaces the Random LASSO portion of the base method with Random Forest and utilizes the na.roughfix imputation option instead of MICE. Alternative method 3 is similar to 2 but instead utilizes the imputed data from the MissForest algorithm (“MFRF”).
+
+      
+## Scenario Parameters   
+100 training and testing datasets consisting of 200 observations each were simulated using the characteristics highlighted below. The supervisor is a function of the first 10 features and a normal error term and is either continuous or binary. The features are multivariate normal random variables with the selected pairwise correlation pattern. The number of noise features is equal to the total number of features identified in the scenario parameters minus 10.  
+  
+`r colT("Table 1: Selected scenario parameters","gray")`   
+  
+|Supervisor|No. Features|Pct. Complete Cases|Correlation|     
+|:-----:|:------:|:-----:|:------:|  
+|**<mark>`r colT("Continuous","blue")`</mark>**|`r colT("35","gray")`|`r colT("50%","gray")`|`r colT("Low (.2)","gray")`               |
+|`r colT("Binary","gray")`|**<mark>`r colT("60","blue")`</mark>**|**<mark>`r colT("25%","blue")`</mark>**| `r colT("Mid (.6)","gray")`    |
+| | `r colT("110","gray")`  ||**<mark>`r colT("Mixed-High (.3, .75-.85)","blue")`</mark> **|
+| | `r colT("210","gray")` |||
+| | `r colT("260","gray")` |||
+| |                        |||  
+  
+#### *$\underline{Missing\space Data}$*  
+The simulated datasets are designed to incorporate a significant amount of missing data with approximately 50% or 75% of observations containing at least one missing feature. The black lines in the chart below indicate the values that are missing from the first of the 100 simulated datasets. Note that a good portion of the missing data lies in features 5 and 10 which were used to generate the supervisor. The “1-SimulateDatasets.RMD” file contains further details and the programming for the simulated data.
+  
+```{r Missing Plot, fig.align = 'center', fig.cap="Fig. 1: Graphical depiction of present/missing features by observation"}
+knitr::include_graphics("Missing Plot-1.png")
+```
+  
+#### *$\underline{Feature\space Correlation}$*      
+An example pairwise correlation structure for the features is shown below. The size and color of the dots represent the correlation between two simulated features, with the bigger circle and darker blue color indicating stronger positive correlation. Note that in this scenario, several features have very high levels of correlation (.75 to .85), of which, features 3-6 were included in the generation of the supervisor.  
+  
+```{r Corr Plot, fig.align = 'center', fig.cap="Fig. 2: Example pairwise feature correlation"}
+knitr::include_graphics("DataSet-1.png")
+```
+
+  
+## Results Comparison
+#### *$\underline{Feature\space Selection}$*  
+Five feature selection performance metrics are used. The first is the number of times a truly associated feature is selected from the 100 separate datasets and is shown in Table 2, below. This table also lists each of the 10 features used to generate the supervisor along with its coefficient and association.
+
+Overall, in this scenario, all 4 methods do very well in picking up the true features with the highest proportion of missing data and highest coefficients (#5 and 10).  More generally, the Random LASSO methods ("RL") outperform the random forest methods ("RF"). MIRL slightly outperforms MFRL in identifying the features with the highest coefficients (#3-5,8-10), but MFRL does a better job at picking up the features with the smaller coefficients (#1,2,7). Neither do a good job at picking up the negatively associated feature #6, which does not contain any missing data, but is highly correlated with features 3 through 5. Interestingly, both RF based methods do a very good job in selecting feature #6, indicating that a combination of a RL and RF approach could be useful for feature selection.    
+  
+```{r}
+mirlFS    = readRDS(file = paste0("S",scenID,"MIRLFeatureRes.Rds"))
+mirlFS    = rename(mirlFS, MIRL = Selected)
+mfrlFS    = readRDS(file = paste0("S",scenID,"MFRLFeatureRes.Rds"))
+rfFS      = readRDS(file = paste0("S",scenID,"RFFeatureRes.Rds"))
+mfrfFS    = readRDS(file = paste0("S",scenID,"MFRFFeatureRes.Rds"))
+summaryFS = mirlFS %>% mutate(MFRL = mfrlFS$Selected,
+                              RF   = rfFS$Selected,
+                              MFRF = mfrfFS$Selected)
+
+summaryFSOrd   = summaryFS[order(summaryFS$Weight, decreasing = TRUE), ][,c(2,4:7)]
+
+testF        = function(x) {
+                  ifelse(x<=25,"#FF7276",
+                    ifelse(x<=50,"#fed8b1",
+                      ifelse(x<=75,"lightyellow","lightgreen")))}
+
+tblCol       = apply(summaryFSOrd[,2:5],2,testF)
+
+#featureResOrd$Selected =  color_bar(tblCol)(featureResOrd$Selected)
+for (i in 2:5){
+  summaryFSOrd[,i] = color_bar(tblCol[,(i-1)])(summaryFSOrd[,i])
+}
+
+kbl(summaryFSOrd, escape = F, caption ="Table 2: Feature Selection Performance Metrics") %>%
+  kable_paper("hover", full_width = F) %>%
+  column_spec(3:6, width = "5cm") %>% group_rows("Coefficient: 0.5",1,2) %>%  
+  group_rows("Coefficient: 0.4",3,4) %>% group_rows("Coefficient: 0.3",5,6) %>%
+  group_rows("Coefficient: 0.2",7,8) %>% group_rows("Coefficient: 0.1",9,10)
+```
+  
+### Single Performance Metrics
+#### *$\underline{Matthew's\space Correlation\space Coefficient}$*  
+Following Liu, et. al. (2016), the second feature selection performance metric is Matthew’s Correlation Coefficient (“MCC”, Matthews, 1975). The formula is included in “2-MIRL.RMD”. MCC is a single, consolidated measure of the confusion matrix. Its value ranges from -1 (incorrectly identified all features) to +1 (correctly identified all 10 associated features and the noise features) with a higher positive value indicating better feature selection performance.
+  
+Note: following Liu, et. al. (2016), two versions of MCC are shown: *Top-10* and *CV Threshold*. In Top-10 the methods assume there are 10 true features and thus 10 features are selected (Figure 3). In CV Threshold, the number of true features is unknown and the methods determine the number of features to select (Figure 4). Thus, the CV Threshold method better reflects real world implementations. Both RL methods outperform the RF methods, with MIRL slightly outperforming MFRL but still within the one-standard error band. 
+  
+```{r, fig.align='center'}
+mirlRes    = readRDS(file = paste0("S",scenID,"MIRLResults.Rds"))
+mfrlRes    = readRDS(file = paste0("S",scenID,"MFRLResults.Rds"))
+rfRes      = readRDS(file = paste0("S",scenID,"RFResults.Rds"))
+mfrfRes    = readRDS(file = paste0("S",scenID,"MFRFResults.Rds"))
+summaryRes = rbind(mirlRes,mfrlRes,rfRes,mfrfRes)
+summaryRes[, 4:9] = lapply(summaryRes[, 4:9], as.numeric)
+summaryRes$scenName = as.factor(summaryRes$scenName)
+summaryRes$scenName = factor(summaryRes$scenName, levels = c('MIRL', 'MFRL', 'RF','MFRF'))
+
+mccT10 = filter(summaryRes, method == "Top10" ) %>% ggplot(., aes(x=scenName, y=avgMcc, fill=scenName)) +
+    geom_bar(colour="black", stat="identity")  + theme_bw()  + guides(fill="none") +
+  geom_errorbar( aes(x=scenName, y=avgMcc, ymin=avgMcc-seMCC, ymax=avgMcc+seMCC), colour="black", width = 0.4, alpha=0.9, size=.25) +
+  labs(x="Method",y="Average MCC",title="Average MCC", subtitle ="Top 10", caption = "Fig. 3") + ylim(0, .8) 
+
+mccCVT = filter(summaryRes, method == "Threshold" ) %>% ggplot(., aes(x=scenName, y=avgMcc, fill=scenName)) +
+    geom_bar(colour="black", stat="identity")  + theme_bw()  + guides(fill="none") +
+  geom_errorbar( aes(x=scenName, y=avgMcc, ymin=avgMcc-seMCC, ymax=avgMcc+seMCC), colour="black", width = 0.4, alpha=0.9, size=.25) +
+  labs(x="Method",y="Average MCC",title="", subtitle ="CV Threshold", caption = "Fig. 4") + ylim(0, .8) 
+
+grid.arrange(mccT10, mccCVT, ncol=2)
+```
+  
+#### *$\underline{True\space Positives}$*  
+The average number of true positives, over 100 simulated datasets, measures how many features each method correctly selects as being truly associated with the supervisor. Again, the RL methods outperform the MF methods, while the performance of MIRL and MFRL are similar. The results for the CV Threshold method are slightly better than in Top 10 as the Threshold method usually results in the selection of more than 10 features, increasing the chance that the truly associated features are chosen.   
+```{r, fig.align='center'}
+tpT10 = filter(summaryRes, method == "Top10" ) %>% ggplot(., aes(x=scenName, y=tp, fill=scenName)) +
+    geom_bar(colour="black", stat="identity")  + theme_bw()  + guides(fill="none") +
+  geom_errorbar( aes(x=scenName, y=tp, ymin=tp-seTP, ymax=tp+seTP), colour="black", width = 0.4, alpha=0.9, size=.25) +
+  labs(x="Method",y="True Positives",title="Correctly Selected Features", subtitle ="Top 10", caption = "Fig. 5") + ylim(0, 10) 
+
+tpCVT = filter(summaryRes, method == "Threshold" ) %>% ggplot(., aes(x=scenName, y=tp, fill=scenName)) +
+    geom_bar(colour="black", stat="identity")  + theme_bw()  + guides(fill="none") +
+   geom_errorbar( aes(x=scenName, y=tp, ymin=tp-seTP, ymax=tp+seTP), colour="black", width = 0.4, alpha=0.9, size=.25) +
+  labs(x="Method",y="True Positives",title="", subtitle ="CV Threshold", caption = "Fig. 6") + ylim(0, 10) 
+
+grid.arrange(tpT10, tpCVT, ncol=2)
+```
+  
+#### *$\underline{False\space Positives}$*    
+The average number of false positives measures how many noise features are incorrectly selected. The average number of false positives between the Top 10 and CV Threshold scenarios is quite different as in many instances, the CV Threshold scenario selects more than 10 features. Again, RL performance exceeds RF but in the CV Threshold scenario, performance is within the one standard error band.     
+```{r, fig.align='center'}
+fpT10 = filter(summaryRes, method == "Top10" ) %>% ggplot(., aes(x=scenName, y=fp, fill=scenName)) +
+         geom_bar(colour="black", stat="identity")  + theme_bw()  + guides(fill="none") +
+         geom_errorbar( aes(x=scenName, y=fp, ymin=fp-seFP, ymax=fp+seFP), colour="black", width = 0.4, alpha=0.9,  
+                              size=.25) + 
+         labs(x="Method",y="False Positives",title="Incorrectly Selected Features", subtitle ="Top 10", caption = "Fig. 7") + ylim(0, 10) 
+
+fpCVT = filter(summaryRes, method == "Threshold" ) %>% ggplot(., aes(x=scenName, y=fp, fill=scenName)) +
+    geom_bar(colour="black", stat="identity")  + theme_bw()  + guides(fill="none") +
+     geom_errorbar( aes(x=scenName, y=fp, ymin=fp-seFP, ymax=fp+seFP), colour="black", width = 0.4, alpha=0.9, size=.25) +
+  labs(x="Method",y="False Positives",title="", subtitle ="CV Threshold", caption = "Fig. 8") + ylim(0, 10) 
+
+grid.arrange(fpT10, fpCVT, ncol=2)
+```
+  
+#### *$\underline{False\space Negatives}$*  
+The average number of false negatives measures how many features that are truly associated with the supervisor are missed by each method. Both MIRL and MFRL perform similarly.   
+```{r, fig.align='center'}
+fnT10 = filter(summaryRes, method == "Top10" ) %>% ggplot(., aes(x=scenName, y=fn, fill=scenName)) +
+    geom_bar(colour="black", stat="identity")  + theme_bw()  + guides(fill="none") + 
+  geom_errorbar( aes(x=scenName, y=fn, ymin=fn-seFN, ymax=fn+seFN), colour="black", width = 0.4, alpha=0.9,  
+                              size=.25) + 
+  labs(x="Method",y="False Negatives",title="Missed Features", subtitle ="Top 10", caption = "Fig. 9") + ylim(0, 10) 
+
+fnCVT = filter(summaryRes, method == "Threshold" ) %>% ggplot(., aes(x=scenName, y=fn, fill=scenName)) +
+    geom_bar(colour="black", stat="identity")  + theme_bw()  + guides(fill="none") +  
+  geom_errorbar( aes(x=scenName, y=fn, ymin=fn-seFN, ymax=fn+seFN), colour="black", width = 0.4, alpha=0.9, size=.25) + 
+  labs(x="Method",y="False Negatives",title="", subtitle ="CV Threshold", caption = "Fig. 10") + ylim(0, 10) 
+
+grid.arrange(fnT10, fnCVT, ncol=2)
+```
+  
+### Predictive Performance  
+#### *$\underline{RMSE}$*  
+Predictive performance, for scenarios with a continuous supervisor, is compared using root mean squared error (RMSE). Lower values indicate better predictive performance. The RL based methods perform significantly better than the RF based methods, as found in other scenarios. MIRL slightly outperforms MFRL in this scenario. The predictive performance was similar between the Top 10 and CV Threshold scenarios.     
+```{r, fig.align='center'}
+rmseT10 = filter(summaryRes, method == "Top10" ) %>% ggplot(., aes(x=scenName, y=rmse, fill=scenName)) +
+    geom_bar(colour="black", stat="identity")  + theme_bw()  + guides(fill="none") +
+  geom_errorbar( aes(x=scenName, y=rmse, ymin=rmse-seRMSE, ymax=rmse+seRMSE), colour="black", width = 0.4, alpha=0.9, size=.25) +
+  labs(x="Method",y="RMSE",title="Predictive Performance", subtitle ="Top 10", caption = "Fig. 11") + ylim(0, 1.8) 
+
+rmseCVT = filter(summaryRes, method == "Threshold" ) %>% ggplot(., aes(x=scenName, y=rmse, fill=scenName)) +
+    geom_bar(colour="black", stat="identity")  + theme_bw()  + guides(fill="none") +
+  geom_errorbar( aes(x=scenName, y=rmse, ymin=rmse-seRMSE, ymax=rmse+seRMSE), colour="black", width = 0.4, alpha=0.9, size=.25) +
+  labs(x="Method",y="RMSE",title="", subtitle ="CV Threshold", caption = "Fig. 12") + ylim(0, 1.8) 
+
+grid.arrange(rmseT10, rmseCVT, ncol=2)
+```
+    
+A jigger plot of all 20,000 test supervisor values (from all 100 simulated test datasets) overlayed with a boxplot is shown below (Figure 13) to provide a basis for evaluating the magnitude of the RMSE. 50% of the test supervisor values lie in the (-1,1) range and a little over 99% lie in the (-4,4) range. 
+  
+```{r BoxPlot, fig.align='center'}
+load(file = paste0("S",scenID,"MFRLyTest.Rdata"))
+supTestData = as.data.frame(unlist(yTest)) 
+supTestData$xVal = rep(0,20000)
+colnames(supTestData) = c("yVal","xVal")
+
+supTestData = supTestData %>% mutate(colPlot = as.factor(ifelse(abs(yVal)<3.94,0,1)))
+source("USGSboxplots.R")
+
+revPlot = supTestData %>% 
+  ggplot(aes(x=xVal, y=yVal))  + 
+  geom_jitter(height=0, alpha=0.25, size=.5, width=0.5, aes(color = colPlot)) + stat_boxplot(geom = "errorbar", width = .8) +
+  geom_boxplot(alpha=0.0, aes(), width = 1) +
+  scale_x_continuous(labels = NULL, breaks = NULL)  + theme(axis.ticks.x=element_blank(),) + theme_minimal()+
+  scale_y_continuous(breaks = pretty(c(-8,8),n=10)) +
+  scale_color_manual(values = c("#009ACD","black"), guide = "none") +
+  xlab(label = " ") +
+  ylab(label = "Supervisor Values") +
+  labs(title = "100 Simulated Test datasets", subtitle = "Supervisor Values Overlayed with a Boxplot",caption = "Fig. 13")
+
+legendPlot <- ggplot_box_legend()
+
+
+plot_grid(revPlot, legendPlot, nrow = 1)
+```
+  
+## Conclusion
+In this scenario, MIRL slightly outperformed MFRL (and the other alternative RF based methods) in most of the performance metrics, but not by much. MFRL performed better in identifying the features with smaller coefficients (#1,2,7) and the RF based methods were best at picking up the negatively associated, and highly correlated feature #6, indicating that a combination of RL and RF methods for feature selection may be the best approach for datasets matching these scenario parameters. High proportions of missing data in features 5 and 10 didn't prohibit any of the methods from correctly selecting those features. 
+
+Full analysis and results, along with references, are contained in the associated paper and a summary of all scenario results are contained in the RShiny page.  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
