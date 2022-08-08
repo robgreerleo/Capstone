@@ -1,3 +1,4 @@
-*.Rmdlinguist-detectable
-*.htmllinguist-detectable=false
-*.htminguist-detectable=false
+*.Rmd  linguist-detectable  
+*.html linguist-detectable=false  
+*.htm linguist-detectable=false  
+
